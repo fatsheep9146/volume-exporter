@@ -1,7 +1,7 @@
 package controller
 
 import (
-	coreinformer "k8s.io/client-go/informers/core/v1"
+	// coreinformer "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corelister "k8s.io/client-go/listers/core/v1"
 	cache "k8s.io/client-go/tools/cache"
@@ -10,13 +10,13 @@ import (
 
 type VolumeController struct {
 	cli       *kubernetes.Clientset
-	podLister *corelister.podLister
+	podLister corelister.PodLister
 	podSynced cache.InformerSynced
 }
 
 func NewVolumeController(
 	cli *kubernetes.Clientset,
-	podInformer *cache.SharedIndexInformer,
+	podInformer cache.SharedIndexInformer,
 ) (*VolumeController, error) {
 	vc := &VolumeController{
 		cli: cli,

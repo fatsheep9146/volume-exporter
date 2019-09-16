@@ -1,37 +1,36 @@
 package app
 
 import (
-	"time"
 	"os"
+	"time"
 
-	"k8s.io/klog"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/rest"
-	coreinformer "k8s.io/client-go/informers/core/v1"
-	cache "k8s.io/client-go/tools/cache"
-	"k8s.io/apimachinery/pkg/fields"
-	api "k8s.io/kubernetes/pkg/apis/core"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	coreinformer "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	cache "k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
+	api "k8s.io/kubernetes/pkg/apis/core"
 
 	"github.com/kpaas-io/volume-exporter/pkg/volume-exporter"
-
 )
 
 const (
 	AllNamespace = ""
 )
 
-type VolumeExporterOption struct{
-	port int32
+type VolumeExporterOption struct {
+	port       int32
 	kubeconfig string
 }
 
 func NewVolumeExporterOption() *VolumeExporterOption {
 
-	return &VolumeExporterOption {
+	return &VolumeExporterOption{
 		port: 9876,
 	}
 }
@@ -46,35 +45,39 @@ func NewExporterCommand() *cobra.Command {
 
 			nodename := getHostName()
 
-			cli := buildClientset(opt.kubeconfig) 
+			cli, err := buildClientset(opt.kubeconfig)
+			if err != nil {
+				cmd.Usage()
+				klog.Fatalf("build clientset failed, err %v", err)
+			}
 
 			podInformer := coreinformer.NewFilteredPodInformer(
 				cli,
 				AllNamespace,
-				time.Second * 30,
+				time.Second*30,
 				cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 				func(opt *v1.ListOptions) {
-					selector := fields.OneTermEqualSelector(api.PodHostField, string(nodeName))
+					selector := fields.OneTermEqualSelector(api.PodHostField, string(nodename))
 					opt.FieldSelector = selector.String()
 				},
 			)
-			
+
 			c, err := controller.NewVolumeController(
 				cli,
-				podInformer) 
+				podInformer)
 			if err != nil {
 				cmd.Usage()
-				klog.Fatalf("new volume controller failed, err %v", err )
+				klog.Fatalf("new volume controller failed, err %v", err)
 			}
 
 			stop := make(chan struct{})
 
 			go podInformer.Run(stop)
 
-			c.Run(stop) 
+			c.Run(stop)
 
 			<-stop
-		}
+		},
 	}
 
 	flag.Int32Var(&opt.port, "port", opt.port, "the port that exporter listen to")
@@ -83,7 +86,7 @@ func NewExporterCommand() *cobra.Command {
 	return cmd
 }
 
-func buildClientset(kubeconfig string) (*kubernetes.Clientset, error){
+func buildClientset(kubeconfig string) (*kubernetes.Clientset, error) {
 	var config *rest.Config
 	var err error
 	if kubeconfig != "" {
@@ -96,15 +99,14 @@ func buildClientset(kubeconfig string) (*kubernetes.Clientset, error){
 		return nil, err
 	}
 
-	cli := kubernetes.NewForConfig(config)
-	return cli
+	cli, err := kubernetes.NewForConfig(config)
+	return cli, err
 }
 
-func getHostName() string{
+func getHostName() string {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return ""
 	}
 	return hostname
 }
-
