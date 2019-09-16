@@ -18,7 +18,7 @@ package controller
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/apimachinery/pkg/util/sets"
+//	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 )
 
@@ -96,7 +96,6 @@ func (collector *volumeStatsCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		ch <- metric
 	}
-	allPVCs := sets.String{}
 	for _, vc := range collector.c.podToVolumes {
 		volumeStats, _ := vc.GetLatest()
 		for _, vs := range volumeStats {

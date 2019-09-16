@@ -127,7 +127,7 @@ func (s *volumeStatCalculator) calcAndStoreStats() {
 	// Call GetMetrics on each Volume and copy the result to a new VolumeStats.FsStats
 	volumesStats := make([]VolumeStats, 0)
 	for pvcname, provider := range s.provider.providers {
-		metric, err := provider.GetMetrics()
+		metric, _ := provider.GetMetrics()
 
 		volumeStats := s.parsePodVolumeStats(s.pod.Name, pvcname, s.pod.Namespace, metric)
 		volumesStats = append(volumesStats, volumeStats)
