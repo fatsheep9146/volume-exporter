@@ -1,9 +1,11 @@
 package app
 
 import (
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,6 +77,14 @@ func NewExporterCommand() *cobra.Command {
 			go podInformer.Run(stop)
 
 			c.Run(stop)
+
+			http.Handle("/metrics", promhttp.Handler())
+			go func() {
+				klog.Infof("starting http server, listening on :%d", opt.port)
+				if err := http.ListenAndServe(fmt.Sprintf(":%d", opt.port), nil); err != nil && err != http.ErrServerClosed {
+					klog.Fatalf("start http server error, err: %v", err)
+				}
+			}()
 
 			<-stop
 		},
