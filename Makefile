@@ -5,8 +5,8 @@ ARCH ?= $(shell go env GOARCH)
 OS ?= $(shell go env GOOS)
 
 # info about the image registry
-REGISTRY ?= xxx
-TAG ?= ttt
+REGISTRY ?= reg.kpaas.io/kpaas
+TAG ?= latest 
 
 OUT_DIR := _output/bin
 CMD_DIR := cmd
@@ -38,8 +38,8 @@ $(TARGETS_WITH_OS_ARCH):
 	$(word 2,$(subst _, ,$@))
 
 $(TARGETS_WITH_IMAGE): image_%: build_%_linux-amd64
-	cp $(OUT_DIR)/linux/$* $(BUILD_DIR)/$*/ 							\
-	docker build -f $(BUILD_DIR)/$*/Dockerfile -t $(REGISTRY)/$*:$(TAG) \
+	cp $(OUT_DIR)/linux/$* $(BUILD_DIR)/$*/ 							
+	docker build $(BUILD_DIR)/$* -t $(REGISTRY)/$*:$(TAG) -f $(BUILD_DIR)/$*/Dockerfile 
 	rm -r $(BUILD_DIR)/$*/$*
 
 $(TARGETS_WITH_PUSH): push_%: image_%
