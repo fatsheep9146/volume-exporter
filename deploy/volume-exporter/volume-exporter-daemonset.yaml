@@ -1,0 +1,38 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: volume-exporter
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: volume-exporter
+  template:
+    metadata:
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      creationTimestamp: null
+      labels:
+        app: volume-exporter
+    spec:
+      containers:
+      - name: volume-exporter
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: spec.nodeName
+        image: reg.kpaas.io/kpaas/volume-exporter:v0.0.1
+        imagePullPolicy: IfNotPresent
+        resources: {}
+      dnsPolicy: ClusterFirst
+      hostNetwork: true
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - operator: Exists
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
