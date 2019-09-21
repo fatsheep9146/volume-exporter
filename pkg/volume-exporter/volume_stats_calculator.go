@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,12 +68,18 @@ func newVolumesMetricProvider(cli *kubernetes.Clientset, pod *v1.Pod) (*volumesM
 	providers := make(map[string]volume.MetricsProvider)
 	for _, vol := range pod.Spec.Volumes {
 		if claim := vol.VolumeSource.PersistentVolumeClaim; claim != nil {
-			klog.Infof("new pvc %s found for pod %s/%s", claim.ClaimName, pod.Namespace, pod.Name)
+			klog.Infof("new pvc [%s] found for pod [%s/%s]", claim.ClaimName, pod.Namespace, pod.Name)
 			pvc, err := cli.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(claim.ClaimName, metav1.GetOptions{})
 			if err != nil {
-				klog.Errorf("get pvc info from apiserver failed, err: %v", err)
+				klog.Errorf("find pvc info from apiserver failed, err: %v", err)
+				return nil, PVCNotFound
 			}
-			providers[pvc.Name] = volume.NewMetricsStatFS("")
+			path := getPath(pod, pvc)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				klog.Errorf("pod [%s/%s] is watched, but mountpoint for pvc [%s] is not created, which is %s", pod.Namespace, pod.Name, pvc.Name, path)
+				return nil, MountPointNotReady
+			}
+			providers[pvc.Name] = volume.NewMetricsStatFS(path)
 		}
 	}
 
@@ -127,7 +135,11 @@ func (s *volumeStatCalculator) calcAndStoreStats() {
 	// Call GetMetrics on each Volume and copy the result to a new VolumeStats.FsStats
 	volumesStats := make([]VolumeStats, 0)
 	for pvcname, provider := range s.provider.providers {
-		metric, _ := provider.GetMetrics()
+		metric, err := provider.GetMetrics()
+		if err != nil {
+			klog.Errorf("get metrics pvc [%s] of pod [%s/%s] failed, err: %s", pvcname, s.pod.Namespace, s.pod.Name, err)
+			continue
+		}
 
 		volumeStats := s.parsePodVolumeStats(s.pod.Name, pvcname, s.pod.Namespace, metric)
 		volumesStats = append(volumesStats, volumeStats)
@@ -153,4 +165,8 @@ func (s *volumeStatCalculator) parsePodVolumeStats(podName string, pvcName strin
 		FsStats: FsStats{Time: metric.Time, AvailableBytes: &available, CapacityBytes: &capacity,
 			UsedBytes: &used, Inodes: &inodes, InodesFree: &inodesFree, InodesUsed: &inodesUsed},
 	}
+}
+
+func getPath(pod *v1.Pod, pvc *v1.PersistentVolumeClaim) string {
+	return fmt.Sprintf("/var/lib/kubelet/pods/%s/volumes/kubernetes.io~csi/%s/mount", pod.UID, pvc.Spec.VolumeName)
 }

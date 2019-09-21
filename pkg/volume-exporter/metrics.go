@@ -18,7 +18,7 @@ package controller
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-//	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog"
 )
 
@@ -96,15 +96,24 @@ func (collector *volumeStatsCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		ch <- metric
 	}
+
+	allPVCs := sets.String{}
 	for _, vc := range collector.c.podToVolumes {
 		volumeStats, _ := vc.GetLatest()
 		for _, vs := range volumeStats {
+
+			pvcUniqStr := vs.Namespace + "/" + vs.PVCName
+			if allPVCs.Has(pvcUniqStr) {
+				// ignore if already collected
+				continue
+			}
 			addGauge(volumeStatsCapacityBytesDesc, vs.PVCName, vs.Namespace, float64(*vs.CapacityBytes))
 			addGauge(volumeStatsAvailableBytesDesc, vs.PVCName, vs.Namespace, float64(*vs.AvailableBytes))
 			addGauge(volumeStatsUsedBytesDesc, vs.PVCName, vs.Namespace, float64(*vs.UsedBytes))
 			addGauge(volumeStatsInodesDesc, vs.PVCName, vs.Namespace, float64(*vs.Inodes))
 			addGauge(volumeStatsInodesFreeDesc, vs.PVCName, vs.Namespace, float64(*vs.InodesFree))
 			addGauge(volumeStatsInodesUsedDesc, vs.PVCName, vs.Namespace, float64(*vs.InodesUsed))
+			allPVCs.Insert(pvcUniqStr)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -77,8 +78,10 @@ func NewExporterCommand() *cobra.Command {
 
 			go podInformer.Run(stop)
 
-			c.Run(stop)
+			go c.Run(stop)
 
+			collector := controller.NewVolumeStatsCollector(c)
+			prometheus.Register(collector)
 			http.Handle("/metrics", promhttp.Handler())
 			go func() {
 				klog.Infof("starting http server, listening on :%d", opt.port)

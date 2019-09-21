@@ -8,6 +8,7 @@ import (
 	// coreinformer "k8s.io/client-go/informers/core/v1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	// "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	// "k8s.io/apimachinery/pkg/util/sets"
@@ -26,8 +27,7 @@ type VolumeController struct {
 	queue workqueue.RateLimitingInterface
 
 	podToVolumes map[string]*volumeStatCalculator
-	// volumeToPodIDs map[types.UID]sets.String
-	lock sync.Mutex
+	lock         sync.Mutex
 }
 
 func NewVolumeController(
@@ -38,7 +38,6 @@ func NewVolumeController(
 		cli:          cli,
 		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Pods"),
 		podToVolumes: make(map[string]*volumeStatCalculator),
-		// volumeToPodIDs: make(map[types.UID]sets.String),
 	}
 
 	vc.podLister = corelister.NewPodLister(podInformer.GetIndexer())
@@ -65,9 +64,11 @@ func (c *VolumeController) Run(stop <-chan struct{}) error {
 
 	klog.Infof("starting workers")
 	for i := 0; i < 2; i++ {
-
+		go wait.Until(c.runWorker, time.Second, stop)
 	}
 	klog.Infof("started workers")
+	<-stop
+	klog.Infof("shuting down workers")
 	return nil
 }
 
@@ -135,6 +136,7 @@ func (c *VolumeController) syncHandler(key string) error {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
+	klog.Infof("syncHandler handle pod [%s/%s]", namespace, name)
 
 	isDeletion := false
 	pod, err := c.podLister.Pods(namespace).Get(name)
@@ -162,7 +164,8 @@ func (c *VolumeController) syncHandler(key string) error {
 
 	err = c.addPod(pod, key)
 	if err != nil {
-		klog.Errorf("add pod %s/%s into volume controller failed, err: %v", err)
+		klog.Errorf("add pod %s/%s into volume controller failed, err: %v", pod.Namespace, pod.Name, err)
+		return err
 	}
 
 	return nil
@@ -170,16 +173,19 @@ func (c *VolumeController) syncHandler(key string) error {
 
 func (c *VolumeController) addPod(pod *v1.Pod, key string) error {
 	if c.podExists(key) {
+		klog.Infof("pod %s/%s has already been added into controller", pod.Namespace, pod.Name)
 		return nil
 	}
 
 	provider, err := newVolumesMetricProvider(c.cli, pod)
 	if err != nil {
-
+		klog.Errorf("new volumeMetricProvider for pod [%s/%s] failed, err: %v", pod.Namespace, pod.Name, err)
+		return err
 	}
 
 	calcultor := newVolumeStatCalculator(provider, time.Second, pod)
 
+	klog.Infof("pod %s/%s is successfully added into controller", pod.Namespace, pod.Name)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -191,6 +197,16 @@ func (c *VolumeController) addPod(pod *v1.Pod, key string) error {
 }
 
 func (c *VolumeController) deletePod(key string) error {
+	if !c.podExists(key) {
+		klog.Infof("pod [%s] is no longer in the controller", key)
+		return nil
+	}
+
+	klog.Infof("pod [%s] is deleted from controller", key)
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.podToVolumes[key].StopOnce()
+	delete(c.podToVolumes, key)
 
 	return nil
 }
