@@ -136,7 +136,6 @@ func (c *VolumeController) syncHandler(key string) error {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
-	klog.Infof("syncHandler handle pod [%s/%s]", namespace, name)
 
 	isDeletion := false
 	pod, err := c.podLister.Pods(namespace).Get(name)
@@ -241,7 +240,7 @@ func (c *VolumeController) update(oldObj, newObj interface{}) {
 		klog.Error(err)
 		return
 	}
-	klog.Infof("[ Update ] action: [%s]", key)
+	// klog.Infof("[ Update ] action: [%s]", key)
 	c.queue.Add(key)
 }
 

@@ -7,6 +7,7 @@ spec:
   selector:
     matchLabels:
       app: volume-exporter
+      release: volume-exporter
   template:
     metadata:
       annotations:
@@ -14,6 +15,7 @@ spec:
       creationTimestamp: null
       labels:
         app: volume-exporter
+        release: volume-exporter
     spec:
       containers:
       - name: volume-exporter
@@ -26,12 +28,22 @@ spec:
         image: reg.kpaas.io/kpaas/volume-exporter:v0.0.1
         imagePullPolicy: IfNotPresent
         resources: {}
+        volumeMounts:
+        - mountPath: /var/lib/kubelet
+          name: kubelet
+          readOnly: true
+          mountPropagation: HostToContainer
       dnsPolicy: ClusterFirst
       hostNetwork: true
       tolerations:
       - key: CriticalAddonsOnly
         operator: Exists
       - operator: Exists
+      volumes:
+      - hostPath:
+          path: /var/lib/kubelet
+          type: ""
+        name: kubelet
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
